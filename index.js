@@ -1,5 +1,7 @@
 const searchInput = document.querySelector(".search-input");
+const locationButton = document.querySelector(".location-button");
 const currentWeatherDiv = document.querySelector(".current-weather");
+const hourlyWeatherHTML = document.querySelector(".hourly-weather .weather-list");
 
 const API_KEY = "182f6be41fb04ffba3661543242611";
 
@@ -14,9 +16,30 @@ const weatherCodes = {
     thunder_rain: [1273, 1276],
 }
 
-const getWeatherDetails = async (cityName) => {
-    const API_URL = `http://api.weatherapi.com/v1/forecast.json?key=${API_KEY}&q=${cityName}`;
+const displayHourlyForecast = (hourlyData) => {
+    const currentHour = new Date().setMinutes(0,0,0);
+    const next24Hours = currentHour + 24 * 60 * 60 * 1000;
 
+    const next24HoursData  = hourlyData.filter(({ time }) =>{
+        const forecastTime = new Date(time).getTime();
+        return forecastTime >= currentHour && forecastTime <= next24Hours;
+    });
+
+    hourlyWeatherHTML.innerHTML = next24HoursData.map(item =>{
+        const temperature = Math.floor(item.temp_c);
+        const time = item.time.split(" ")[1].substring(0, 5);
+        const weatherIcon = Object.keys(weatherCodes).find(icon => weatherCodes[icon].includes(item.condition.code))
+
+        return `<li class="weather-item">
+                        <p class="time">${time}</p>
+                        <img src="img/${weatherIcon}.svg" class="weather-icon">
+                        <p class="temperature">${temperature}°</p>
+                    </li>`;
+    }).join("");
+}
+
+const getWeatherDetails = async (API_URL) => {
+    window.innerWidth <= 768 && searchInput.blur();
 
     try{
         const response = await fetch(API_URL);
@@ -31,16 +54,34 @@ const getWeatherDetails = async (cityName) => {
         currentWeatherDiv.querySelector(".temperature").innerHTML = `${temperature}<span>°C</span>`;
         currentWeatherDiv.querySelector(".description").innerText = description;
 
-        console.log(data);
+        const combinedHourlyData = [...data.forecast.forecastday[0].hour, ...data.forecast.forecastday[1].hour];
+        displayHourlyForecast(combinedHourlyData);
+
+        searchInput.value = data.location.name;
     }catch(error){
         console.log(error);
     }
+}
+
+const setupWeatherRequest = (cityName) => {
+    const API_URL = `http://api.weatherapi.com/v1/forecast.json?key=${API_KEY}&q=${cityName}&days=2`;
+    getWeatherDetails(API_URL);
 }
 
 searchInput.addEventListener("keyup", (e) =>{
     const cityName = searchInput.value.trim();
 
     if(e.key == "Enter" && cityName) {
-        getWeatherDetails(cityName);
+        setupWeatherRequest(cityName);
     }
+})
+
+locationButton.addEventListener("click", () =>{
+    navigator.geolocation.getCurrentPosition(position => {
+        const { latitude, longitude } = position.coords;
+        const API_URL = `http://api.weatherapi.com/v1/forecast.json?key=${API_KEY}&q=${latitude}, ${longitude}&days=2`;
+        getWeatherDetails(API_URL);
+    }, error => {
+        alert("Location access denied");
+    });
 })
